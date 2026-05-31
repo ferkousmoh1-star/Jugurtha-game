@@ -1,2 +1,453 @@
 # Jugurtha-game
 Game of the algerian berber king Jugurtha of 115 b.c against the roman empire . 
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>JUGURTHA – La Guerre contre Rome</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { background:#0a0604; overflow:hidden; font-family:'Georgia',serif; touch-action:none; user-select:none; }
+  #gameCanvas { display:block; width:100vw; height:100vh; }
+  #ui { position:fixed; inset:0; pointer-events:none; }
+
+  /* HUD */
+  #hud { position:fixed; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:flex-start; padding:10px 14px; pointer-events:none; }
+  .hud-left { display:flex; flex-direction:column; gap:4px; }
+  .bar-wrap { display:flex; align-items:center; gap:6px; }
+  .bar-label { color:#c8a96e; font-size:10px; font-weight:bold; letter-spacing:1px; width:24px; text-shadow:0 1px 3px #000; }
+  .bar-bg { width:120px; height:10px; background:rgba(0,0,0,.5); border:1px solid rgba(200,169,110,.3); border-radius:5px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:5px; transition:width .15s; }
+  #healthBar { background:linear-gradient(90deg,#b22222,#e84040); }
+  #staminaBar { background:linear-gradient(90deg,#1a6b1a,#3ecf3e); }
+  #xpBar { background:linear-gradient(90deg,#7b3d00,#d4820a); }
+  .hud-right { text-align:right; }
+  #levelDisplay { color:#c8a96e; font-size:13px; font-weight:bold; text-shadow:0 1px 4px #000; }
+  #scoreDisplay { color:#e8c87a; font-size:11px; text-shadow:0 1px 3px #000; }
+  #coinsDisplay { color:#ffd700; font-size:11px; text-shadow:0 1px 3px #000; }
+  #waveDisplay { color:#ff8c42; font-size:10px; letter-spacing:1px; text-shadow:0 1px 3px #000; }
+  #comboDisplay { position:fixed; top:85px; left:50%; transform:translateX(-50%); color:#ffdd00; font-size:16px; font-weight:bold; text-shadow:0 0 12px #ff8800; opacity:0; transition:opacity .3s; pointer-events:none; }
+
+  /* Screens */
+  .screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:50; }
+  #menuScreen { background:linear-gradient(160deg,#0d0804 0%,#1a0f06 40%,#0d0804 100%); }
+  #menuScreen::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% 30%,rgba(180,120,40,.15),transparent 70%); }
+  .menu-title { font-size:clamp(28px,7vw,52px); color:#c8a96e; letter-spacing:4px; text-align:center; text-shadow:0 0 30px rgba(200,169,110,.5),0 2px 6px #000; line-height:1.1; position:relative; }
+  .menu-subtitle { font-size:clamp(12px,3vw,18px); color:#8a6840; letter-spacing:6px; margin-top:6px; text-transform:uppercase; position:relative; }
+  .menu-divider { width:200px; height:1px; background:linear-gradient(90deg,transparent,#c8a96e,transparent); margin:20px 0; }
+  .btn { padding:14px 36px; border:1px solid #c8a96e; background:linear-gradient(135deg,rgba(200,169,110,.1),rgba(200,169,110,.05)); color:#c8a96e; font-size:15px; letter-spacing:3px; cursor:pointer; transition:all .2s; border-radius:3px; position:relative; overflow:hidden; pointer-events:all; }
+  .btn:active { transform:scale(.96); background:rgba(200,169,110,.2); }
+  .btn::after { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(255,255,255,.05),transparent); }
+  .btn-small { padding:10px 22px; font-size:12px; letter-spacing:2px; }
+
+  #gameOverScreen, #victoryScreen { background:rgba(0,0,0,.88); }
+  .game-over-title { font-size:clamp(32px,8vw,60px); color:#cc2200; text-shadow:0 0 30px rgba(200,0,0,.5); letter-spacing:4px; }
+  .victory-title { font-size:clamp(28px,7vw,52px); color:#ffd700; text-shadow:0 0 30px rgba(255,215,0,.5); letter-spacing:4px; }
+  .result-score { color:#c8a96e; font-size:18px; margin:12px 0; }
+  .hidden { display:none !important; }
+
+  /* Touch controls */
+  #controls { position:fixed; bottom:0; left:0; right:0; height:180px; display:flex; justify-content:space-between; align-items:flex-end; padding:0 20px 24px; pointer-events:none; }
+  #joystickZone { width:130px; height:130px; background:rgba(200,169,110,.07); border:1px solid rgba(200,169,110,.15); border-radius:50%; position:relative; display:flex; align-items:center; justify-content:center; pointer-events:all; }
+  #joystickKnob { width:52px; height:52px; background:radial-gradient(circle,rgba(200,169,110,.5),rgba(200,169,110,.2)); border:1px solid rgba(200,169,110,.4); border-radius:50%; position:absolute; transition:none; }
+  #actionButtons { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr 1fr; gap:10px; align-items:center; pointer-events:all; }
+  .action-btn { width:58px; height:58px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:bold; letter-spacing:.5px; color:#fff; border:1.5px solid; cursor:pointer; pointer-events:all; transition:transform .08s,opacity .08s; text-shadow:0 1px 2px rgba(0,0,0,.8); flex-direction:column; gap:2px; }
+  .action-btn:active { transform:scale(.88); opacity:.8; }
+  .action-btn .btn-icon { font-size:18px; line-height:1; }
+  #btnAttack  { background:rgba(180,30,30,.55); border-color:rgba(255,80,80,.6); }
+  #btnJump    { background:rgba(30,100,180,.55); border-color:rgba(80,160,255,.6); }
+  #btnShield  { background:rgba(60,60,60,.55); border-color:rgba(160,160,160,.6); }
+  #btnDodge   { background:rgba(120,80,0,.55); border-color:rgba(220,160,0,.6); }
+  #btnJavelin { background:rgba(30,120,30,.55); border-color:rgba(80,220,80,.6); grid-column:1/-1; width:100%; border-radius:28px; height:46px; }
+
+  /* Floating text */
+  .float-text { position:fixed; font-weight:bold; pointer-events:none; animation:floatUp .9s ease-out forwards; z-index:100; text-shadow:0 1px 3px #000; }
+  @keyframes floatUp { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-60px)} }
+
+  /* Pause */
+  #pauseBtn { position:fixed; top:12px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.4); border:1px solid rgba(200,169,110,.3); color:#c8a96e; font-size:11px; padding:5px 14px; border-radius:12px; cursor:pointer; pointer-events:all; letter-spacing:1px; }
+  #pauseScreen { background:rgba(0,0,0,.8); gap:16px; }
+  #pauseScreen h2 { color:#c8a96e; font-size:28px; letter-spacing:4px; }
+
+  /* Boss bar */
+  #bossBar { position:fixed; top:72px; left:50%; transform:translateX(-50%); width:260px; text-align:center; display:none; }
+  #bossName { color:#ff4444; font-size:11px; letter-spacing:2px; font-weight:bold; text-shadow:0 1px 3px #000; }
+  #bossBarBg { width:100%; height:12px; background:rgba(0,0,0,.5); border:1px solid rgba(255,80,80,.4); border-radius:6px; overflow:hidden; margin-top:3px; }
+  #bossBarFill { height:100%; background:linear-gradient(90deg,#8b0000,#ff2222); border-radius:6px; transition:width .2s; }
+
+  /* Upgrade screen */
+  #upgradeScreen { background:rgba(0,0,0,.92); gap:16px; }
+  #upgradeScreen h2 { color:#ffd700; font-size:22px; letter-spacing:3px; }
+  .upgrade-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; max-width:340px; width:100%; padding:0 16px; pointer-events:all; }
+  .upg-card { background:rgba(200,169,110,.1); border:1px solid rgba(200,169,110,.3); border-radius:8px; padding:14px 10px; text-align:center; cursor:pointer; transition:all .2s; }
+  .upg-card:active { background:rgba(200,169,110,.25); transform:scale(.97); }
+  .upg-icon { font-size:26px; }
+  .upg-name { color:#c8a96e; font-size:11px; font-weight:bold; letter-spacing:1px; margin-top:4px; }
+  .upg-cost { color:#ffd700; font-size:10px; margin-top:2px; }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-left">
+    <div class="bar-wrap"><span class="bar-label">VIE</span><div class="bar-bg"><div class="bar-fill" id="healthBar" style="width:100%"></div></div></div>
+    <div class="bar-wrap"><span class="bar-label">END</span><div class="bar-bg"><div class="bar-fill" id="staminaBar" style="width:100%"></div></div></div>
+    <div class="bar-wrap"><span class="bar-label">XP</span><div class="bar-bg"><div class="bar-fill" id="xpBar" style="width:0%"></div></div></div>
+  </div>
+  <div class="hud-right">
+    <div id="levelDisplay">Niv.1</div>
+    <div id="scoreDisplay">Score: 0</div>
+    <div id="coinsDisplay">🪙 0</div>
+    <div id="waveDisplay">VAGUE 1</div>
+  </div>
+</div>
+<div id="comboDisplay"></div>
+<div id="bossBar"><div id="bossName">CENTURION</div><div id="bossBarBg"><div id="bossBarFill" style="width:100%"></div></div></div>
+<button id="pauseBtn">⏸ PAUSE</button>
+
+<!-- Controls -->
+<div id="controls">
+  <div id="joystickZone"><div id="joystickKnob"></div></div>
+  <div id="actionButtons">
+    <div class="action-btn" id="btnShield"><span class="btn-icon">🛡️</span>BOUCLIER</div>
+    <div class="action-btn" id="btnJump"><span class="btn-icon">⬆️</span>SAUT</div>
+    <div class="action-btn" id="btnDodge"><span class="btn-icon">💨</span>ESQUIVE</div>
+    <div class="action-btn" id="btnAttack"><span class="btn-icon">⚔️</span>ATTAQUE</div>
+    <div class="action-btn" id="btnJavelin"><span class="btn-icon">🏹</span>JAVELOT</div>
+  </div>
+</div>
+
+<!-- Screens -->
+<div class="screen" id="menuScreen">
+  <div class="menu-title">JUGURTHA</div>
+  <div class="menu-subtitle">La Guerre contre Rome</div>
+  <div class="menu-divider"></div>
+  <button class="btn" id="btnPlay" style="pointer-events:all">⚔️ COMMENCER</button>
+  <div style="height:12px"></div>
+  <button class="btn btn-small" id="btnHowTo" style="pointer-events:all">? COMMENT JOUER</button>
+</div>
+
+<div class="screen hidden" id="howToScreen">
+  <div style="color:#c8a96e;font-size:18px;letter-spacing:3px;margin-bottom:16px">COMMANDES</div>
+  <div style="color:#a08050;font-size:13px;line-height:2;text-align:center;max-width:300px">
+    🕹️ Joystick → Déplacement<br>
+    ⚔️ Attaque → Frapper<br>
+    ⬆️ Saut → Double saut possible<br>
+    🛡️ Bouclier → Bloquer les coups<br>
+    💨 Esquive → Roulade d'urgence<br>
+    🏹 Javelot → Tir à distance<br><br>
+    <span style="color:#ffd700">Battez les ennemis pour monter de niveau !</span>
+  </div>
+  <div style="height:20px"></div>
+  <button class="btn btn-small" id="btnBackMenu" style="pointer-events:all">← RETOUR</button>
+</div>
+
+<div class="screen hidden" id="gameOverScreen">
+  <div class="game-over-title">DÉFAITE</div>
+  <div class="result-score" id="goScore"></div>
+  <div style="color:#888;font-size:12px;margin-bottom:20px">Jugurtha est tombé au combat...</div>
+  <button class="btn" id="btnRestart" style="pointer-events:all">↺ RÉESSAYER</button>
+</div>
+
+<div class="screen hidden" id="victoryScreen">
+  <div class="victory-title">VICTOIRE !</div>
+  <div class="result-score" id="vicScore"></div>
+  <div style="color:#a0a0a0;font-size:12px;margin-bottom:20px">Numidie est libre !</div>
+  <button class="btn" id="btnPlayAgain" style="pointer-events:all">⚔️ REJOUER</button>
+</div>
+
+<div class="screen hidden" id="pauseScreen">
+  <h2>PAUSE</h2>
+  <button class="btn" id="btnResume" style="pointer-events:all">▶ REPRENDRE</button>
+  <button class="btn btn-small" id="btnQuit" style="pointer-events:all">✕ MENU</button>
+</div>
+
+<div class="screen hidden" id="upgradeScreen">
+  <h2>AMÉLIORATION</h2>
+  <div style="color:#a08050;font-size:13px">Choisissez une amélioration !</div>
+  <div class="upgrade-grid" id="upgradeGrid"></div>
+</div>
+
+<script>
+// ─── ENGINE ───────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── GLOBAL STATE ─────────────────────────────────────────────────────────────
+let GS = null;          // single source of truth, null when not playing
+let animFrame = null;   // requestAnimationFrame handle
+let lastTime = 0;
+
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const FPS_TARGET = 60;
+const GRAVITY = 0.45;
+const TILE = 40;
+
+const ZONES = [
+  { name:'Village Numide', bg:['#3d2b1f','#2a1e12'], ground:'#5c3d1e', sky:'#1a3a5c' },
+  { name:'Désert de Numidie', bg:['#4a3010','#2a1800'], ground:'#8b6330', sky:'#d4884a' },
+  { name:'Montagnes', bg:['#2a2a3a','#1a1a28'], ground:'#556070', sky:'#1a2030' },
+  { name:'Camp Romain', bg:['#1a2010','#0d1408'], ground:'#3a4520', sky:'#0d1a0d' },
+  { name:'Forteresse Romaine', bg:['#1a1010','#0d0808'], ground:'#402020', sky:'#0d0808' },
+];
+
+const UPGRADES_POOL = [
+  { id:'hp',   icon:'❤️',  name:'Vitalité +25',  desc:'PV max +25',  cost:0 },
+  { id:'atk',  icon:'⚔️',  name:'Force +5',      desc:'Dégâts +5',   cost:0 },
+  { id:'spd',  icon:'💨',  name:'Vitesse +0.5',  desc:'Mvt plus vite',cost:0 },
+  { id:'jav',  icon:'🏹',  name:'Javelots +2',   desc:'Stock +2',    cost:0 },
+  { id:'stam', icon:'⚡',  name:'Endurance +20', desc:'Endurance max',cost:0 },
+  { id:'xpm',  icon:'✨',  name:'XP x1.5',       desc:'Gain XP boosté',cost:0 },
+];
+
+// ─── PLAYER CLASS ─────────────────────────────────────────────────────────────
+class Player {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.w = 32; this.h = 48;
+    this.vx = 0; this.vy = 0;
+    this.onGround = false;
+    this.jumpsLeft = 2;
+    this.facing = 1; // 1=right, -1=left
+
+    // Stats
+    this.maxHp = 100; this.hp = 100;
+    this.maxStamina = 100; this.stamina = 100;
+    this.atk = 20;
+    this.speed = 3.5;
+    this.javelins = 5; this.maxJavelins = 5;
+    this.xpMult = 1;
+
+    // State flags (all properly defined)
+    this.dead = false;
+    this.isAttacking = false;    // ← was "p.attacking" undefined, now explicit
+    this.isShielding = false;
+    this.isDodging = false;
+    this.isHurt = false;
+    this.invincible = false;
+
+    // Cooldowns in FRAMES (not ms) to match dt
+    this.attackCD = 0;      // frames until next attack
+    this.shieldCD = 0;
+    this.dodgeCD = 0;
+    this.javelotCD = 0;
+    this.hurtTimer = 0;
+    this.invincibleTimer = 0;
+    this.attackTimer = 0;   // how long attack animation lasts
+
+    // Stam regen
+    this.stamRegenTimer = 0;
+
+    // XP / level
+    this.xp = 0;
+    this.level = 1;
+    this.xpToNext = 80;
+
+    // Score / coins
+    this.score = 0;
+    this.coins = 0;
+    this.combo = 0;
+    this.comboTimer = 0;
+  }
+
+  get alive() { return !this.dead; }   // ← p.alive now works everywhere
+
+  // Attempt an action; returns true if performed
+  tryAttack() {
+    if (this.attackCD > 0 || this.dead) return false;
+    this.isAttacking = true;
+    this.attackTimer = 18;
+    this.attackCD = 25;
+    return true;
+  }
+  tryJump() {
+    if (this.jumpsLeft <= 0 || this.dead) return false;
+    this.vy = -9.5;
+    this.jumpsLeft--;
+    GS.sfx('jump');
+    return true;
+  }
+  tryShield() {
+    if (this.shieldCD > 0 || this.stamina < 10 || this.dead) return false;
+    this.isShielding = true;
+    return true;
+  }
+  stopShield() { this.isShielding = false; this.shieldCD = 8; }
+  tryDodge() {
+    if (this.dodgeCD > 0 || this.stamina < 20 || this.dead) return false;
+    this.isDodging = true;
+    this.invincible = true;
+    this.invincibleTimer = 22;
+    this.dodgeCD = 50;
+    this.stamina = Math.max(0, this.stamina - 20);
+    this.vx = this.facing * 7;
+    GS.sfx('dodge');
+    return true;
+  }
+  tryJavelin() {
+    if (this.javelotCD > 0 || this.javelins <= 0 || this.dead) return false;
+    this.javelins--;
+    this.javelotCD = 45;
+    GS.projectiles.push(new Projectile(
+      this.x + (this.facing > 0 ? this.w : 0),
+      this.y + this.h/2 - 4,
+      this.facing * 9, 0, 'player', this.atk * 0.8
+    ));
+    GS.sfx('javelin');
+    return true;
+  }
+
+  takeDamage(dmg) {
+    if (this.invincible || this.dead) return;
+    if (this.isShielding) {
+      dmg = Math.floor(dmg * 0.1);
+      GS.sfx('block');
+      spawnFloatText('BLOQUÉ!', this.x + this.w/2, this.y, '#aaaaff', 12);
+    }
+    this.hp = Math.max(0, this.hp - dmg);
+    this.isHurt = true; this.hurtTimer = 12;
+    this.invincible = true; this.invincibleTimer = 30;
+    this.combo = 0;
+    GS.sfx('hurt');
+    spawnFloatText('-'+dmg, this.x + this.w/2, this.y, '#ff4444', 14);
+    if (this.hp <= 0) this.die();
+  }
+
+  gainXP(amt) {
+    amt = Math.floor(amt * this.xpMult);
+    this.xp += amt;
+    if (this.xp >= this.xpToNext) {
+      this.xp -= this.xpToNext;
+      this.level++;
+      this.xpToNext = Math.floor(this.xpToNext * 1.4);
+      GS.showUpgrades();
+    }
+  }
+
+  die() {
+    if (this.dead) return;
+    this.dead = true;
+    this.vx = 0;
+    GS.sfx('death');
+    // Delay game-over to let death animation play briefly
+    setTimeout(() => { if (GS) GS.endGame(false); }, 1200);
+  }
+
+  update(dt, input) {
+    if (this.dead) {
+      // Still apply gravity for death fall
+      this.vy += GRAVITY;
+      this.y += this.vy;
+      return;
+    }
+
+    // Timers (decrement by dt frames)
+    if (this.attackCD   > 0) this.attackCD   -= dt;
+    if (this.shieldCD   > 0) this.shieldCD   -= dt;
+    if (this.dodgeCD    > 0) this.dodgeCD    -= dt;
+    if (this.javelotCD  > 0) this.javelotCD  -= dt;
+    if (this.hurtTimer  > 0) { this.hurtTimer -= dt; if (this.hurtTimer <= 0) this.isHurt = false; }
+    if (this.attackTimer> 0) { this.attackTimer-= dt; if (this.attackTimer <= 0) this.isAttacking = false; }
+    if (this.invincibleTimer > 0) { this.invincibleTimer -= dt; if (this.invincibleTimer <= 0) this.invincible = false; }
+    if (this.comboTimer > 0) { this.comboTimer -= dt; if (this.comboTimer <= 0) this.combo = 0; }
+
+    // Stamina regen
+    if (!this.isShielding && !this.isDodging) {
+      this.stamRegenTimer += dt;
+      if (this.stamRegenTimer >= 2) {
+        this.stamRegenTimer = 0;
+        this.stamina = Math.min(this.maxStamina, this.stamina + 0.8);
+      }
+    }
+
+    // Movement
+    if (!this.isDodging) {
+      const moveX = input.jx;
+      if (Math.abs(moveX) > 0.1) {
+        this.vx = moveX * this.speed;
+        this.facing = moveX > 0 ? 1 : -1;
+      } else {
+        this.vx *= 0.75;
+      }
+    } else {
+      this.vx *= 0.88;
+      this.invincibleTimer -= dt;
+      if (this.invincibleTimer <= 0) this.isDodging = false;
+    }
+
+    // Gravity
+    this.vy += GRAVITY;
+    if (this.vy > 16) this.vy = 16;
+
+    // Move
+    this.x += this.vx;
+    this.y += this.vy;
+
+    // Ground collision
+    const ground = GS.groundY;
+    if (this.y + this.h >= ground) {
+      this.y = ground - this.h;
+      this.vy = 0;
+      this.onGround = true;
+      this.jumpsLeft = 2;
+    } else {
+      this.onGround = false;
+    }
+
+    // Bounds
+    if (this.x < 0) this.x = 0;
+    if (this.x + this.w > GS.worldW) this.x = GS.worldW - this.w;
+
+    // Shield stamina drain
+    if (this.isShielding) {
+      this.stamina = Math.max(0, this.stamina - 0.15 * dt);
+      if (this.stamina <= 0) this.stopShield();
+    }
+
+    // Javelin regen
+    if (this.javelins < this.maxJavelins) {
+      this.javelins += 0.001 * dt;
+      if (this.javelins > this.maxJavelins) this.javelins = this.maxJavelins;
+    }
+  }
+
+  draw(cam) {
+    const sx = this.x - cam.x;
+    const sy = this.y - cam.y;
+    if (this.invincible && Math.floor(Date.now() / 80) % 2 === 0) return;
+
+    ctx.save();
+    ctx.translate(sx + this.w / 2, sy + this.h);
+    if (this.facing < 0) ctx.scale(-1, 1);
+
+    const t = Date.now() / 120;
+    const walkOff = this.onGround && Math.abs(this.vx) > 0.5 ? Math.sin(t) * 3 : 0;
+    const legSwing = this.onGround && Math.abs(this.vx) > 0.5 ? Math.sin(t) * 18 : 0;
+    const hurt = this.isHurt;
+
+    // ── Jugurtha – guerrier berbère ──────────────────────────────
+    const skin  = hurt ? '#ffaa88' : (this.dead ? '#888' : '#b5793a');
+    const tunic = hurt ? '#cc6644' : '#4a7a3a';   // vert sombre numide
+    const belt  = '#8b5e1a';
+    const cloth = '#2a5a2a';
+
+    // JAMBES
+    ctx.save();
+    // Jambe gauche
+    ctx.save();
+    ctx.rotate((-legSwing * Math.PI) / 180);
+    ctx.fillStyle = '#6b3a10'; // sandales cuir
+    ctx.fillRect(-14, -20 + walkOff, 11, 20);
+    // sandales
+    ctx.
