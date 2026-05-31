@@ -2,7 +2,7 @@
   "name": "Jugurtha - La Guerre contre Rome",
   "short_name": "Jugurtha",
   "description": "Jeu mobile 2D - Jugurtha roi de Numidie contre les Romains",
-  "start_url": "/Jugurtha-game/Jugurtha.html",
+  "start_url": "Jugurtha.html",
   "display": "fullscreen",
   "orientation": "landscape",
   "background_color": "#0a0604",
