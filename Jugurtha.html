@@ -2232,3 +2232,74 @@ function showEndScreen(win, score, coins) {
   document.getElementById('bossBar').style.display = 'none';
   document.getElementById('pauseBtn').style.display = 'none';
   document.getElementById('upgradeScreen').classList
+.add('hidden');
+  if (win) {
+    document.getElementById('vicScore').textContent = `Score: ${Math.floor(score)} | Pièces: ${coins}`;
+    document.getElementById('victoryScreen').classList.remove('hidden');
+  } else {
+    document.getElementById('goScore').textContent = `Score: ${Math.floor(score)} | Pièces: ${coins}`;
+    document.getElementById('gameOverScreen').classList.remove('hidden');
+  }
+}
+
+// ─── GAME LOOP ────────────────────────────────────────────────────────────────
+function gameLoop(ts) {
+  const dt = Math.min((ts - lastTime) / (1000 / FPS_TARGET), 3);
+  lastTime = ts;
+  if (GS && !GS.ended) {
+    GS.update(dt);
+    GS.draw();
+  }
+  animFrame = requestAnimationFrame(gameLoop);
+}
+
+function startGame() {
+  cancelAnimationFrame(animFrame);
+  GS = new GameState();
+  document.getElementById('menuScreen').classList.add('hidden');
+  document.getElementById('howToScreen').classList.add('hidden');
+  document.getElementById('gameOverScreen').classList.add('hidden');
+  document.getElementById('victoryScreen').classList.add('hidden');
+  document.getElementById('pauseScreen').classList.add('hidden');
+  document.getElementById('hud').style.opacity = '1';
+  document.getElementById('controls').style.display = 'flex';
+  document.getElementById('pauseBtn').style.display = 'block';
+  lastTime = performance.now();
+  animFrame = requestAnimationFrame(gameLoop);
+}
+
+// ─── JOYSTICK ─────────────────────────────────────────────────────────────────
+const joystickZone = document.getElementById('joystickZone');
+const joystickKnob = document.getElementById('joystickKnob');
+let joystickActive = false, joystickId = null;
+let joystickOrigin = { x: 0, y: 0 };
+const JOYSTICK_MAX = 44;
+
+joystickZone.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const touch = e.changedTouches[0];
+  joystickId = touch.identifier;
+  joystickActive = true;
+  const rect = joystickZone.getBoundingClientRect();
+  joystickOrigin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}, { passive: false });
+
+window.addEventListener('touchmove', e => {
+  if (!joystickActive) return;
+  for (const touch of e.changedTouches) {
+    if (touch.identifier !== joystickId) continue;
+    const dx = touch.clientX - joystickOrigin.x;
+    const dy = touch.clientY - joystickOrigin.y;
+    const dist = Math.min(Math.sqrt(dx*dx+dy*dy), JOYSTICK_MAX);
+    const angle = Math.atan2(dy, dx);
+    const nx = Math.cos(angle) * dist;
+    const ny = Math.sin(angle) * dist;
+    joystickKnob.style.transform = `translate(${nx}px,${ny}px)`;
+    if (GS) {
+      GS.input.jx = nx / JOYSTICK_MAX;
+      GS.input.jy = ny / JOYSTICK_MAX;
+    }
+  }
+}, { passive: false });
+
+window
