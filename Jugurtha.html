@@ -56,8 +56,6 @@
   #btnAttack  { background:rgba(180,30,30,.55); border-color:rgba(255,80,80,.6); }
   #btnJump    { background:rgba(30,100,180,.55); border-color:rgba(80,160,255,.6); }
   #btnShield  { background:rgba(60,60,60,.55); border-color:rgba(160,160,160,.6); }
-  #btnDodge   { background:rgba(120,80,0,.55); border-color:rgba(220,160,0,.6); }
-  #btnJavelin { background:rgba(30,120,30,.55); border-color:rgba(80,220,80,.6); grid-column:1/-1; width:100%; border-radius:28px; height:46px; }
 
   /* Floating text */
   .float-text { position:fixed; font-weight:bold; pointer-events:none; animation:floatUp .9s ease-out forwards; z-index:100; text-shadow:0 1px 3px #000; }
@@ -109,12 +107,10 @@
 <!-- Controls -->
 <div id="controls">
   <div id="joystickZone"><div id="joystickKnob"></div></div>
-  <div id="actionButtons">
+  <div id="actionButtons" style="grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:10px;">
     <div class="action-btn" id="btnShield"><span class="btn-icon">🛡️</span>BOUCLIER</div>
     <div class="action-btn" id="btnJump"><span class="btn-icon">⬆️</span>SAUT</div>
-    <div class="action-btn" id="btnDodge"><span class="btn-icon">💨</span>ESQUIVE</div>
-    <div class="action-btn" id="btnAttack"><span class="btn-icon">⚔️</span>ATTAQUE</div>
-    <div class="action-btn" id="btnJavelin"><span class="btn-icon">🏹</span>JAVELOT</div>
+    <div class="action-btn" id="btnAttack" style="grid-column:1/-1;width:100%;border-radius:28px;height:52px;"><span class="btn-icon">⚔️</span>ATTAQUE</div>
   </div>
 </div>
 
@@ -134,9 +130,7 @@
     🕹️ Joystick → Déplacement<br>
     ⚔️ Attaque → Frapper<br>
     ⬆️ Saut → Double saut possible<br>
-    🛡️ Bouclier → Bloquer les coups<br>
-    💨 Esquive → Roulade d'urgence<br>
-    🏹 Javelot → Tir à distance<br><br>
+    🛡️ Bouclier → Bloquer les coups<br><br>
     <span style="color:#ffd700">Battez tous les ennemis pour ouvrir la porte du prochain stage !</span>
   </div>
   <div style="height:20px"></div>
@@ -200,11 +194,10 @@ const ZONES = [
 ];
 
 const UPGRADES_POOL = [
-  { id:'hp',   icon:'❤️',  name:'Vitalité +25',  desc:'PV max +25',  cost:0 },
-  { id:'atk',  icon:'⚔️',  name:'Force +5',      desc:'Dégâts +5',   cost:0 },
+  { id:'hp',   icon:'❤️',  name:'Vitalité +25',  desc:'PV max +25',   cost:0 },
+  { id:'atk',  icon:'⚔️',  name:'Force +5',      desc:'Dégâts +5',    cost:0 },
   { id:'spd',  icon:'💨',  name:'Vitesse +0.5',  desc:'Mvt plus vite',cost:0 },
-  { id:'jav',  icon:'🏹',  name:'Javelots +2',   desc:'Stock +2',    cost:0 },
-  { id:'stam', icon:'⚡',  name:'Endurance +20', desc:'Endurance max',cost:0 },
+  { id:'stam', icon:'⚡',  name:'Endurance +20', desc:'Endurance max', cost:0 },
   { id:'xpm',  icon:'✨',  name:'XP x1.5',       desc:'Gain XP boosté',cost:0 },
 ];
 
@@ -223,25 +216,21 @@ class Player {
     this.maxStamina = 100; this.stamina = 100;
     this.atk = 20;
     this.speed = 3.5;
-    this.javelins = 5; this.maxJavelins = 5;
     this.xpMult = 1;
 
-    // State flags (all properly defined)
+    // State flags
     this.dead = false;
-    this.isAttacking = false;    // ← was "p.attacking" undefined, now explicit
+    this.isAttacking = false;
     this.isShielding = false;
-    this.isDodging = false;
     this.isHurt = false;
     this.invincible = false;
 
-    // Cooldowns in FRAMES (not ms) to match dt
-    this.attackCD = 0;      // frames until next attack
+    // Cooldowns in FRAMES
+    this.attackCD = 0;
     this.shieldCD = 0;
-    this.dodgeCD = 0;
-    this.javelotCD = 0;
     this.hurtTimer = 0;
     this.invincibleTimer = 0;
-    this.attackTimer = 0;   // how long attack animation lasts
+    this.attackTimer = 0;
 
     // Stam regen
     this.stamRegenTimer = 0;
@@ -281,29 +270,6 @@ class Player {
     return true;
   }
   stopShield() { this.isShielding = false; this.shieldCD = 8; }
-  tryDodge() {
-    if (this.dodgeCD > 0 || this.stamina < 20 || this.dead) return false;
-    this.isDodging = true;
-    this.invincible = true;
-    this.invincibleTimer = 22;
-    this.dodgeCD = 50;
-    this.stamina = Math.max(0, this.stamina - 20);
-    this.vx = this.facing * 7;
-    GS.sfx('dodge');
-    return true;
-  }
-  tryJavelin() {
-    if (this.javelotCD > 0 || this.javelins <= 0 || this.dead) return false;
-    this.javelins--;
-    this.javelotCD = 45;
-    GS.projectiles.push(new Projectile(
-      this.x + (this.facing > 0 ? this.w : 0),
-      this.y + this.h/2 - 4,
-      this.facing * 9, 0, 'player', this.atk * 0.8
-    ));
-    GS.sfx('javelin');
-    return true;
-  }
 
   takeDamage(dmg) {
     if (this.invincible || this.dead) return;
@@ -352,15 +318,13 @@ class Player {
     // Timers (decrement by dt frames)
     if (this.attackCD   > 0) this.attackCD   -= dt;
     if (this.shieldCD   > 0) this.shieldCD   -= dt;
-    if (this.dodgeCD    > 0) this.dodgeCD    -= dt;
-    if (this.javelotCD  > 0) this.javelotCD  -= dt;
     if (this.hurtTimer  > 0) { this.hurtTimer -= dt; if (this.hurtTimer <= 0) this.isHurt = false; }
     if (this.attackTimer> 0) { this.attackTimer-= dt; if (this.attackTimer <= 0) this.isAttacking = false; }
     if (this.invincibleTimer > 0) { this.invincibleTimer -= dt; if (this.invincibleTimer <= 0) this.invincible = false; }
     if (this.comboTimer > 0) { this.comboTimer -= dt; if (this.comboTimer <= 0) this.combo = 0; }
 
     // Stamina regen
-    if (!this.isShielding && !this.isDodging) {
+    if (!this.isShielding) {
       this.stamRegenTimer += dt;
       if (this.stamRegenTimer >= 2) {
         this.stamRegenTimer = 0;
@@ -369,7 +333,7 @@ class Player {
     }
 
     // Movement
-    if (!this.isDodging) {
+    if (true) {
       const moveX = input.jx;
       if (Math.abs(moveX) > 0.1) {
         this.vx = moveX * this.speed;
@@ -377,10 +341,6 @@ class Player {
       } else {
         this.vx *= 0.75;
       }
-    } else {
-      this.vx *= 0.88;
-      this.invincibleTimer -= dt;
-      if (this.invincibleTimer <= 0) this.isDodging = false;
     }
 
     // Gravity
@@ -410,12 +370,6 @@ class Player {
     if (this.isShielding) {
       this.stamina = Math.max(0, this.stamina - 0.15 * dt);
       if (this.stamina <= 0) this.stopShield();
-    }
-
-    // Javelin regen
-    if (this.javelins < this.maxJavelins) {
-      this.javelins += 0.001 * dt;
-      if (this.javelins > this.maxJavelins) this.javelins = this.maxJavelins;
     }
   }
 
@@ -669,11 +623,15 @@ class Player {
 
 // ─── ENEMY CLASS ──────────────────────────────────────────────────────────────
 const ENEMY_TYPES = {
-  soldier: { name:'Légionnaire', hp:60, atk:12, spd:1.5, w:28, h:44, color:'#8b0000', reward:15, xp:12, isBoss:false },
-  archer:  { name:'Archer',      hp:40, atk:8,  spd:1.2, w:26, h:42, color:'#5c3317', reward:12, xp:10, isBoss:false, ranged:true },
-  cavalry: { name:'Cavalier',    hp:80, atk:18, spd:2.8, w:46, h:40, color:'#6b0000', reward:20, xp:16, isBoss:false },
-  centurion:{name:'Centurion',   hp:200,atk:25, spd:1.4, w:36, h:52, color:'#cc2200', reward:50, xp:40, isBoss:true  },
-  general: { name:'Général',     hp:350,atk:35, spd:1.6, w:40, h:56, color:'#880000', reward:100,xp:80, isBoss:true  },
+  soldier:   { name:'Légionnaire',  hp:60,  atk:12, spd:1.5, w:28, h:44, color:'#8b0000', reward:15, xp:12, isBoss:false },
+  archer:    { name:'Archer',       hp:40,  atk:8,  spd:1.2, w:26, h:42, color:'#5c3317', reward:12, xp:10, isBoss:false, ranged:true },
+  cavalry:   { name:'Cavalier',     hp:80,  atk:18, spd:2.8, w:46, h:40, color:'#6b0000', reward:20, xp:16, isBoss:false },
+  hastatus:  { name:'Hastatus',     hp:50,  atk:10, spd:1.8, w:26, h:42, color:'#7a1100', reward:14, xp:11, isBoss:false, ranged:true, javelin:true },
+  velite:    { name:'Vélite',       hp:30,  atk:7,  spd:2.4, w:22, h:38, color:'#4a3010', reward:10, xp:8,  isBoss:false },
+  praetorian:{ name:'Prétoriens',   hp:110, atk:22, spd:1.3, w:32, h:48, color:'#4a0080', reward:30, xp:25, isBoss:false },
+  ballista:  { name:'Ballistaire',  hp:45,  atk:30, spd:0.0, w:30, h:44, color:'#5a4000', reward:18, xp:14, isBoss:false, ranged:true, slow:true },
+  centurion: { name:'Centurion',    hp:200, atk:25, spd:1.4, w:36, h:52, color:'#cc2200', reward:50, xp:40, isBoss:true  },
+  general:   { name:'Général',      hp:350, atk:35, spd:1.6, w:40, h:56, color:'#880000', reward:100,xp:80, isBoss:true  },
 };
 
 class Enemy {
@@ -691,6 +649,8 @@ class Enemy {
     this.xpReward = t.xp;
     this.isBoss = t.isBoss;
     this.ranged = t.ranged || false;
+    this.isJavelin = t.javelin || false;
+    this.isSlow = t.slow || false;
     this.vx = 0; this.vy = 0;
     this.onGround = false;
     this.facing = -1;
@@ -815,6 +775,14 @@ class Enemy {
       this._drawRomanArcher(hurt, walkOff, legSwing);
     } else if (this.type === 'cavalry') {
       this._drawRomanCavalry(hurt);
+    } else if (this.type === 'hastatus') {
+      this._drawHastatus(hurt, walkOff, legSwing);
+    } else if (this.type === 'velite') {
+      this._drawVelite(hurt, walkOff, legSwing);
+    } else if (this.type === 'praetorian') {
+      this._drawPraetorian(hurt, walkOff, legSwing);
+    } else if (this.type === 'ballista') {
+      this._drawBallistaire(hurt);
     }
 
     // HP bar
@@ -835,121 +803,580 @@ class Enemy {
   _drawRomanSoldier(hurt, walkOff, legSwing) {
     const isCenturion = this.type === 'centurion';
     const isGeneral   = this.type === 'general';
-    const skin  = hurt ? '#ffccaa' : '#d4956a';
-    const armor = hurt ? '#cc8888' : (isGeneral ? '#c8a020' : isCenturion ? '#b87020' : '#8899aa');
-    const red   = '#cc1111';
-    const h     = this.h;
+    const skin   = hurt ? '#ffccaa' : '#c8845a';
+    const armor  = hurt ? '#cc9999' : (isGeneral ? '#d4a020' : isCenturion ? '#c06820' : '#8ca0b8');
+    const armorH = hurt ? '#ffbbbb' : (isGeneral ? '#f0c840' : isCenturion ? '#e08030' : '#b8ccd8');
+    const armorS = hurt ? '#996666' : (isGeneral ? '#9a7010' : isCenturion ? '#8a4810' : '#607080');
+    const red    = '#cc1111';
+    const h      = this.h;
 
-    // Jambes avec jambières
-    ctx.save();
+    // ── JAMBES avec greaves romaines détaillées ──────────────────
+    // Jambe gauche
     ctx.save(); ctx.rotate((-legSwing*Math.PI)/180);
-    ctx.fillStyle = armor; ctx.fillRect(-14, -24+walkOff, 11, 18);
-    ctx.fillStyle = '#5a3010'; ctx.fillRect(-15, -6+walkOff, 13, 5);
+    // Jambière (greave) de bronze
+    const glg = ctx.createLinearGradient(-14,0,0,0);
+    glg.addColorStop(0, armorS); glg.addColorStop(0.4, armorH); glg.addColorStop(1, armorS);
+    ctx.fillStyle = glg; ctx.beginPath(); ctx.roundRect(-14, -24+walkOff, 11, 22, 2); ctx.fill();
+    // Ligne centrale de la greave
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-9,-22+walkOff); ctx.lineTo(-9,-4+walkOff); ctx.stroke();
+    // Sandales caliga
+    ctx.fillStyle = '#2a1200'; ctx.beginPath(); ctx.roundRect(-16,-4+walkOff,15,5,1); ctx.fill();
+    ctx.fillStyle = '#4a2800'; ctx.fillRect(-15,-2+walkOff,13,2);
     ctx.restore();
+    // Jambe droite
     ctx.save(); ctx.rotate((legSwing*Math.PI)/180);
-    ctx.fillStyle = armor; ctx.fillRect(2, -24-walkOff, 11, 18);
-    ctx.fillStyle = '#5a3010'; ctx.fillRect(2, -6-walkOff, 13, 5);
-    ctx.restore();
+    const grg = ctx.createLinearGradient(2,0,14,0);
+    grg.addColorStop(0, armorS); grg.addColorStop(0.6, armorH); grg.addColorStop(1, armorS);
+    ctx.fillStyle = grg; ctx.beginPath(); ctx.roundRect(2,-24-walkOff,11,22,2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(8,-22-walkOff); ctx.lineTo(8,-4-walkOff); ctx.stroke();
+    ctx.fillStyle = '#2a1200'; ctx.beginPath(); ctx.roundRect(1,-4-walkOff,15,5,1); ctx.fill();
+    ctx.fillStyle = '#4a2800'; ctx.fillRect(2,-2-walkOff,13,2);
     ctx.restore();
 
-    // Pteryges (lanières cuir)
-    for (let i=0;i<7;i++) {
-      ctx.fillStyle = i%2===0 ? '#8b5e1a' : '#6a4a10';
-      ctx.fillRect(-16+i*5, -34, 5, 12);
+    // ── PTERYGES (lamières de cuir) ────────────────────────────
+    for (let i = 0; i < 8; i++) {
+      const lc = i % 2 === 0 ? '#7a5010' : '#9a6820';
+      ctx.fillStyle = lc;
+      const lx = -17 + i * 4.5;
+      ctx.beginPath(); ctx.moveTo(lx, -32); ctx.lineTo(lx+3.5,-32); ctx.lineTo(lx+2.5,-20); ctx.lineTo(lx+0.5,-20); ctx.closePath(); ctx.fill();
+      if (i % 2 === 0) { ctx.strokeStyle = 'rgba(255,200,80,0.3)'; ctx.lineWidth=0.5; ctx.strokeRect(lx,-32,3.5,12); }
     }
 
-    // Cuirasse lorica segmentata
-    const cg = ctx.createLinearGradient(-15,-h+8,15,-h+8);
-    cg.addColorStop(0, hurt?(isGeneral?'#aa8800':'#aa9999'):(isGeneral?'#d4a830':'#9aacb8'));
-    cg.addColorStop(0.5, hurt?(isGeneral?'#cc9900':'#cc8888'):(isGeneral?'#b89020':'#c0ccd4'));
-    cg.addColorStop(1, hurt?(isGeneral?'#886600':'#886666'):(isGeneral?'#9a7010':'#7a8a94'));
+    // ── CUIRASSE Lorica Segmentata (superbe) ───────────────────
+    // Corps principal
+    const cg = ctx.createLinearGradient(-15,-h+8,15,-h+34);
+    cg.addColorStop(0, armorS);
+    cg.addColorStop(0.3, armorH);
+    cg.addColorStop(0.6, armor);
+    cg.addColorStop(1, armorS);
     ctx.fillStyle = cg;
     ctx.beginPath(); ctx.roundRect(-15,-h+8,30,26,3); ctx.fill();
-    ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.lineWidth=1;
-    for(let i=0;i<4;i++){ctx.beginPath();ctx.moveTo(-15,-h+14+i*5);ctx.lineTo(15,-h+14+i*5);ctx.stroke();}
-
-    // Scutum (bouclier)
-    ctx.save(); ctx.translate(-20,-h+18);
-    const sg=ctx.createLinearGradient(-8,-18,8,18);
-    sg.addColorStop(0,'#aa1111');sg.addColorStop(0.5,'#cc2222');sg.addColorStop(1,'#880000');
-    ctx.fillStyle=sg; ctx.beginPath(); ctx.roundRect(-8,-18,14,36,3); ctx.fill();
-    ctx.fillStyle='#d4a020'; ctx.beginPath(); ctx.arc(0,0,4,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle='#d4a020'; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(-4,-8); ctx.lineTo(0,-12); ctx.lineTo(4,-8); ctx.stroke();
-    ctx.restore();
-
-    // Bras droit + gladius
-    ctx.fillStyle=skin; ctx.beginPath(); ctx.roundRect(10,-h+10,8,18,4); ctx.fill();
-    ctx.save();
-    if(this.isAttacking){ctx.translate(16,-h+20);ctx.rotate(0.4);}
-    else{ctx.translate(16,-h+30);ctx.rotate(-0.1);}
-    const blg=ctx.createLinearGradient(-2,-18,2,0);
-    blg.addColorStop(0,'#f0f0f0');blg.addColorStop(0.4,'#d0d0d0');blg.addColorStop(1,'#909090');
-    ctx.fillStyle=blg; ctx.beginPath(); ctx.moveTo(0,-18);ctx.lineTo(3,-4);ctx.lineTo(-3,-4);ctx.closePath(); ctx.fill();
-    ctx.fillStyle='#d4a020'; ctx.fillRect(-4,-3,8,2);
-    ctx.fillStyle='#5a3010'; ctx.fillRect(-2,0,5,7);
-    ctx.restore();
-
-    // Tête + casque galea
-    ctx.fillStyle=skin; ctx.beginPath(); ctx.arc(0,-h-2,11,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle=armor; ctx.fillRect(-10,-h+4,7,12); ctx.fillRect(4,-h+4,7,12);
-    const hg=ctx.createLinearGradient(-11,-h-14,11,-h-14);
-    hg.addColorStop(0,hurt?(isGeneral?'#aa8800':'#aa7777'):(isGeneral?'#d4a020':'#9aacb8'));
-    hg.addColorStop(1,hurt?(isGeneral?'#cc9900':'#cc9999'):(isGeneral?'#f0c040':'#c8d8e0'));
-    ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(0,-h-2,12,Math.PI,0); ctx.fill();
-    ctx.fillStyle=armor; ctx.fillRect(-12,-h+3,24,5);
-    if(isCenturion||isGeneral){
-      ctx.fillStyle=red;
-      for(let i=-5;i<=5;i+=2){const fh=10+Math.abs(i)*.5;ctx.fillRect(i-1,-h-14-fh,2,fh);}
-    } else {
-      ctx.fillStyle=red; ctx.beginPath(); ctx.arc(0,-h-15,5,0,Math.PI*2); ctx.fill();
+    // Bandes horizontales de la lorica segmentata
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.2;
+    for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(-15,-h+14+i*5); ctx.lineTo(15,-h+14+i*5); ctx.stroke(); }
+    // Reflets métalliques
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 0.8;
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(-14,-h+15+i*5); ctx.lineTo(14,-h+15+i*5); ctx.stroke(); }
+    // Ornement central (si centurion/général)
+    if (isCenturion) {
+      ctx.fillStyle = '#f0c030'; ctx.font = 'bold 8px serif'; ctx.textAlign='center';
+      ctx.fillText('SPQR', 0, -h+25); ctx.textAlign='left';
+    } else if (isGeneral) {
+      // Méduse en or (ornement de général)
+      ctx.fillStyle = '#f0c040'; ctx.beginPath(); ctx.arc(0,-h+22,5,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#c8901a'; ctx.beginPath(); ctx.arc(0,-h+22,3,0,Math.PI*2); ctx.fill();
     }
-    ctx.fillStyle='#fff'; ctx.fillRect(2,-h,6,5);
-    ctx.fillStyle='#1a0800'; ctx.fillRect(3,-h+1,3,3);
+
+    // ── SCUTUM romain (grand bouclier rectangulaire courbe) ─────
+    ctx.save(); ctx.translate(-22,-h+18);
+    const sg = ctx.createLinearGradient(-8,-20,8,20);
+    sg.addColorStop(0, hurt?'#881111':'#aa1111');
+    sg.addColorStop(0.3, hurt?'#aa2222':'#dd2222');
+    sg.addColorStop(0.7, hurt?'#881111':'#aa1111');
+    sg.addColorStop(1, hurt?'#660000':'#880000');
+    ctx.fillStyle = sg;
+    // Forme légèrement courbée du scutum
+    ctx.beginPath();
+    ctx.moveTo(-8,-20); ctx.quadraticCurveTo(-11,0,-8,20);
+    ctx.lineTo(6,20); ctx.quadraticCurveTo(9,0,6,-20); ctx.closePath();
+    ctx.fill();
+    // Bordure bronze
+    ctx.strokeStyle = '#c89020'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-8,-20); ctx.quadraticCurveTo(-11,0,-8,20);
+    ctx.lineTo(6,20); ctx.quadraticCurveTo(9,0,6,-20); ctx.closePath();
+    ctx.stroke();
+    // Umbo (bosse centrale)
+    const umbo = ctx.createRadialGradient(0,0,0,0,0,5);
+    umbo.addColorStop(0,'#f0e060'); umbo.addColorStop(1,'#c89020');
+    ctx.fillStyle = umbo; ctx.beginPath(); ctx.arc(0,0,5,0,Math.PI*2); ctx.fill();
+    // Décoration SPQR / aigle
+    ctx.fillStyle = '#d4a020'; ctx.font = '5px serif'; ctx.textAlign='center';
+    ctx.fillText('✦', 0, -8); ctx.fillText('✦', 0, 9); ctx.textAlign='left';
+    ctx.restore();
+
+    // ── BRAS DROIT + GLADIUS ────────────────────────────────────
+    ctx.fillStyle = skin; ctx.beginPath(); ctx.roundRect(10,-h+10,8,18,4); ctx.fill();
+    // Avant-bras
+    ctx.fillStyle = skin; ctx.beginPath(); ctx.roundRect(11,-h+22,7,10,3); ctx.fill();
+    ctx.save();
+    if (this.isAttacking) { ctx.translate(16,-h+18); ctx.rotate(0.5); }
+    else { ctx.translate(16,-h+32); ctx.rotate(-0.15); }
+    // Gladius avec lame détaillée
+    const blg = ctx.createLinearGradient(-2,-20,2,0);
+    blg.addColorStop(0,'#f8f8f8'); blg.addColorStop(0.3,'#e0e0e0'); blg.addColorStop(0.7,'#b0b0b0'); blg.addColorStop(1,'#808080');
+    ctx.fillStyle = blg;
+    ctx.beginPath(); ctx.moveTo(0,-20); ctx.lineTo(3,-6); ctx.lineTo(0,-2); ctx.lineTo(-3,-6); ctx.closePath(); ctx.fill();
+    // Fuller (rainure)
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 0.7;
+    ctx.beginPath(); ctx.moveTo(0,-18); ctx.lineTo(0,-5); ctx.stroke();
+    // Garde en or
+    ctx.fillStyle = '#d4a020'; ctx.beginPath(); ctx.roundRect(-5,-3,10,2.5,1); ctx.fill();
+    // Poignée sculptée
+    ctx.fillStyle = '#6a3810'; ctx.beginPath(); ctx.roundRect(-2.5,0,5,8,2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,200,80,0.4)'; ctx.lineWidth = 0.8;
+    for (let i=0;i<3;i++) { ctx.beginPath(); ctx.moveTo(-2.5,2+i*2.5); ctx.lineTo(2.5,2+i*2.5); ctx.stroke(); }
+    // Pommeau
+    ctx.fillStyle = '#d4a020'; ctx.beginPath(); ctx.arc(0,8,3,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // ── ÉPAULDRONS ─────────────────────────────────────────────
+    const epG = ctx.createLinearGradient(-20,-h+8,0,-h+8);
+    epG.addColorStop(0,armorS); epG.addColorStop(0.5,armorH); epG.addColorStop(1,armor);
+    ctx.fillStyle = epG; ctx.beginPath(); ctx.ellipse(-13,-h+9,9,5,-0.3,0,Math.PI*2); ctx.fill();
+    const epGr = ctx.createLinearGradient(0,-h+8,20,-h+8);
+    epGr.addColorStop(0,armor); epGr.addColorStop(0.5,armorH); epGr.addColorStop(1,armorS);
+    ctx.fillStyle = epGr; ctx.beginPath(); ctx.ellipse(13,-h+9,9,5,0.3,0,Math.PI*2); ctx.fill();
+    // Bordures des épaulettes
+    ctx.strokeStyle = 'rgba(255,200,80,0.3)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(-13,-h+9,9,5,-0.3,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(13,-h+9,9,5,0.3,0,Math.PI*2); ctx.stroke();
+
+    // ── TÊTE + CASQUE GALEA ROMAIN ─────────────────────────────
+    // Cou
+    ctx.fillStyle = skin; ctx.fillRect(-4,-h-2,8,6);
+    // Visage
+    ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(0,-h-6,11,0,Math.PI*2); ctx.fill();
+    // Joues du casque (jugulaires)
+    const jug = ctx.createLinearGradient(-12,-h,0,-h);
+    jug.addColorStop(0,armorS); jug.addColorStop(0.5,armor); jug.addColorStop(1,armorH);
+    ctx.fillStyle = jug; ctx.beginPath(); ctx.roundRect(-12,-h+4,6,13,2); ctx.fill();
+    ctx.fillStyle = jug; ctx.beginPath(); ctx.roundRect(6,-h+4,6,13,2); ctx.fill();
+
+    // ── Calotte du casque (galea) ───────────────────────────────
+    const hg = ctx.createRadialGradient(-4,-h-16,1,0,-h-10,14);
+    hg.addColorStop(0, armorH);
+    hg.addColorStop(0.5, armor);
+    hg.addColorStop(1, armorS);
+    ctx.fillStyle = hg;
+    ctx.beginPath(); ctx.arc(0,-h-6,13,Math.PI,0); ctx.fill();
+    // Bande de nuque (protège-nuque)
+    ctx.fillStyle = armor; ctx.beginPath(); ctx.roundRect(-12,-h+2,24,6,2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,200,80,0.3)'; ctx.lineWidth=1; ctx.strokeRect(-12,-h+2,24,6);
+    // Bande frontale ciselée
+    ctx.fillStyle = hurt?armorS:'#d4a830';
+    ctx.fillRect(-12,-h-3,24,4);
+    ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=0.6;
+    for (let i=-10;i<=10;i+=4) { ctx.beginPath(); ctx.moveTo(i,-h-3); ctx.lineTo(i+2,-h+1); ctx.stroke(); }
+
+    // ── CIMIER/DÉCORATION DU CASQUE ─────────────────────────────
+    if (isCenturion) {
+      // Cimier transversal (de gauche à droite = signe distinctif du centurion)
+      ctx.fillStyle = red;
+      for (let i=-9;i<=9;i+=2) { const fh=12+Math.abs(i)*0.4; ctx.fillRect(i-1,-h-18-fh,2,fh); }
+      // Ornement doré sur le cimier
+      ctx.fillStyle='#f0c030'; ctx.fillRect(-10,-h-18,20,3);
+    } else if (isGeneral) {
+      // Grand cimier en plumes d'autruche (général)
+      ctx.fillStyle = '#cc1111';
+      for (let i=-7;i<=7;i+=2) { const fh=16+Math.abs(i)*0.5; ctx.fillRect(i-1,-h-22-fh,2,fh); }
+      ctx.fillStyle='#f0c840'; ctx.fillRect(-8,-h-22,16,3);
+      // Rangée de plumes blanches
+      ctx.fillStyle='rgba(255,255,220,0.7)';
+      for (let i=-5;i<=5;i+=3) { ctx.beginPath(); ctx.ellipse(i,-h-28,1.5,6,0,0,Math.PI*2); ctx.fill(); }
+    } else {
+      // Petite bosse / crête légionnaire simple
+      ctx.fillStyle = red;
+      ctx.beginPath(); ctx.ellipse(0,-h-16,6,4,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='rgba(200,50,50,0.6)'; ctx.beginPath(); ctx.ellipse(0,-h-18,4,6,0,0,Math.PI*2); ctx.fill();
+    }
+
+    // ── YEUX ET VISAGE ──────────────────────────────────────────
+    // Fond oculaire ombre
+    ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(-8,-h-9,7,5); ctx.fillRect(1,-h-9,7,5);
+    // Blanc des yeux
+    ctx.fillStyle = '#fff'; ctx.fillRect(-7,-h-8,5,4); ctx.fillRect(2,-h-8,5,4);
+    // Iris
+    ctx.fillStyle = '#2a1000'; ctx.fillRect(-6,-h-7,3,3); ctx.fillRect(3,-h-7,3,3);
+    // Sourcils épais (romain viril)
+    ctx.fillStyle = '#3a2000'; ctx.fillRect(-8,-h-11,6,2); ctx.fillRect(2,-h-11,6,2);
+    // Nez légèrement marqué
+    ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(0,-h-4,2,0,Math.PI*2); ctx.fill();
   }
 
   _drawRomanArcher(hurt, walkOff, legSwing) {
-    const skin='#d4956a', tunic=hurt?'#cc8888':'#556633';
-    const h=this.h;
+    const skin  = hurt?'#ffccaa':'#c8845a';
+    const tunic = hurt?'#cc9999':'#4a5e28'; // vert sombre auxiliaire
+    const armor = hurt?'#aaaaaa':'#8ca0b8';
+    const h     = this.h;
 
-    ctx.save();
+    // Jambes (jambières simples auxiliaires)
     ctx.save(); ctx.rotate((-legSwing*Math.PI)/180);
-    ctx.fillStyle='#7a4a00'; ctx.fillRect(-11,-20+walkOff,9,20);
-    ctx.fillStyle='#3a1a00'; ctx.fillRect(-13,-4+walkOff,12,4);
+    ctx.fillStyle='#6a4a10'; ctx.fillRect(-11,-20+walkOff,9,20);
+    ctx.fillStyle='#2a1200'; ctx.beginPath(); ctx.roundRect(-13,-4+walkOff,12,5,1); ctx.fill();
     ctx.restore();
     ctx.save(); ctx.rotate((legSwing*Math.PI)/180);
-    ctx.fillStyle='#7a4a00'; ctx.fillRect(2,-20-walkOff,9,20);
-    ctx.fillStyle='#3a1a00'; ctx.fillRect(1,-4-walkOff,12,4);
-    ctx.restore();
+    ctx.fillStyle='#6a4a10'; ctx.fillRect(2,-20-walkOff,9,20);
+    ctx.fillStyle='#2a1200'; ctx.beginPath(); ctx.roundRect(1,-4-walkOff,12,5,1); ctx.fill();
     ctx.restore();
 
-    ctx.fillStyle=tunic; ctx.beginPath(); ctx.roundRect(-12,-h+10,24,26,3); ctx.fill();
-    ctx.fillStyle='#8b5e1a'; ctx.fillRect(-12,-h+34,24,5);
+    // Tunique auxiliaire
+    const tg = ctx.createLinearGradient(-12,-h+10,12,-h+36);
+    tg.addColorStop(0, hurt?'#aa6666':'#5a7030'); tg.addColorStop(1, hurt?'#884444':'#3a5020');
+    ctx.fillStyle=tg; ctx.beginPath(); ctx.roundRect(-12,-h+10,24,28,3); ctx.fill();
+    // Ceinture
+    ctx.fillStyle='#7a5010'; ctx.fillRect(-13,-h+36,26,5);
+    ctx.fillStyle='#c89020'; ctx.beginPath(); ctx.roundRect(-4,-h+35,8,7,2); ctx.fill();
+    // Épaulière légère
+    ctx.fillStyle=armor; ctx.beginPath(); ctx.ellipse(-11,-h+12,7,4,-0.2,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(11,-h+12,7,4,0.2,0,Math.PI*2); ctx.fill();
 
-    // Arc
-    ctx.save(); ctx.translate(-14,-h+18);
+    // ARC avec tension visible
+    ctx.save(); ctx.translate(-16,-h+18);
+    // Bois de l'arc
     ctx.strokeStyle='#6b3a10'; ctx.lineWidth=3;
-    ctx.beginPath(); ctx.arc(0,0,16,-1.0,1.0); ctx.stroke();
-    ctx.strokeStyle='#e8e0c0'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(0,0,16,-1.1,1.1); ctx.stroke();
+    // Extrémités de l'arc (nocks)
+    ctx.fillStyle='#8b5020'; ctx.beginPath(); ctx.arc(Math.cos(-1.1)*16,Math.sin(-1.1)*16,3,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(Math.cos(1.1)*16,Math.sin(1.1)*16,3,0,Math.PI*2); ctx.fill();
+    // Corde
+    ctx.strokeStyle='rgba(240,230,180,0.9)'; ctx.lineWidth=1;
     ctx.beginPath();
-    ctx.moveTo(Math.cos(-1.0)*16,Math.sin(-1.0)*16);
-    ctx.lineTo(Math.cos(1.0)*16,Math.sin(1.0)*16);
+    ctx.moveTo(Math.cos(-1.1)*16,Math.sin(-1.1)*16);
+    ctx.lineTo(Math.cos(1.1)*16,Math.sin(1.1)*16);
     ctx.stroke();
-    if(this.shootCD>20){
-      ctx.strokeStyle='#8b5e1a'; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.moveTo(-18,0); ctx.lineTo(4,0); ctx.stroke();
+    // Flèche encochée (si en train de tirer)
+    if(this.shootCD>25){
+      ctx.strokeStyle='#7a4810'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(-20,0); ctx.lineTo(5,0); ctx.stroke();
+      // Pointe
       ctx.fillStyle='#c0c0c0';
-      ctx.beginPath(); ctx.moveTo(4,0);ctx.lineTo(0,-3);ctx.lineTo(0,3);ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(5,0); ctx.lineTo(1,-3); ctx.lineTo(1,3); ctx.closePath(); ctx.fill();
+      // Empennage
+      ctx.strokeStyle='rgba(180,60,30,.9)'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(-20,0); ctx.lineTo(-15,-4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-20,0); ctx.lineTo(-15,4); ctx.stroke();
     }
     ctx.restore();
 
-    ctx.fillStyle=skin; ctx.beginPath(); ctx.roundRect(10,-h+10,7,16,3); ctx.fill();
-    ctx.fillStyle=skin; ctx.beginPath(); ctx.arc(0,-h-2,10,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle=hurt?'#aa9999':'#9aacb8';
-    ctx.beginPath(); ctx.arc(0,-h-2,11,Math.PI,0); ctx.fill();
-    ctx.fillRect(-11,-h+3,22,4);
-    ctx.fillStyle='#fff'; ctx.fillRect(2,-h,5,4);
-    ctx.fillStyle='#1a0800'; ctx.fillRect(3,-h+1,3,2);
+    // Bras gauche (tient l'arc)
+    ctx.fillStyle=skin; ctx.beginPath(); ctx.roundRect(-22,-h+10,8,22,3); ctx.fill();
+    // Bras droit (tire la corde)
+    ctx.fillStyle=skin; ctx.beginPath(); ctx.roundRect(9,-h+10,7,16,3); ctx.fill();
+
+    // Tête + casque auxiliaire (cassis)
+    ctx.fillStyle=skin; ctx.beginPath(); ctx.arc(0,-h-4,10,0,Math.PI*2); ctx.fill();
+    // Casque simple en bronze léger
+    const hg2 = ctx.createRadialGradient(-3,-h-14,1,0,-h-8,13);
+    hg2.addColorStop(0,hurt?'#ddbbaa':'#c8b880');
+    hg2.addColorStop(1,hurt?'#aa8888':'#9a8840');
+    ctx.fillStyle=hg2; ctx.beginPath(); ctx.arc(0,-h-4,11,Math.PI,0); ctx.fill();
+    // Protège nuque
+    ctx.fillStyle=hurt?'#aa8888':'#9a8840'; ctx.beginPath(); ctx.roundRect(-11,-h+2,22,5,2); ctx.fill();
+    // Petite crête verte (auxiliaire)
+    ctx.fillStyle='#336622';
+    ctx.beginPath(); ctx.ellipse(0,-h-14,5,3,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0,-h-16,3,5,0,0,Math.PI*2); ctx.fill();
+    // Yeux
+    ctx.fillStyle='#fff'; ctx.fillRect(-6,-h-7,4,3); ctx.fillRect(2,-h-7,4,3);
+    ctx.fillStyle='#1a0800'; ctx.fillRect(-5,-h-6,2,2); ctx.fillRect(3,-h-6,2,2);
+  }
+
+  _drawHastatus(hurt, walkOff, legSwing) {
+    // Hastatus : fantassin romain avec pilum (javelot lourd)
+    const skin  = hurt?'#ffccaa':'#c8845a';
+    const armor = hurt?'#bbcccc':'#7a9aaa';
+    const armorH= hurt?'#dde0e0':'#a0c0cc';
+    const red   = '#bb1111';
+    const h     = this.h;
+
+    // Jambes
+    ctx.save(); ctx.rotate((-legSwing*Math.PI)/180);
+    ctx.fillStyle=armor; ctx.fillRect(-12,-22+walkOff,10,20);
+    ctx.fillStyle='#2a1200'; ctx.beginPath(); ctx.roundRect(-14,-4+walkOff,13,5,1); ctx.fill();
+    ctx.restore();
+    ctx.save(); ctx.rotate((legSwing*Math.PI)/180);
+    ctx.fillStyle=armor; ctx.fillRect(2,-22-walkOff,10,20);
+    ctx.fillStyle='#2a1200'; ctx.beginPath(); ctx.roundRect(2,-4-walkOff,13,5,1); ctx.fill();
+    ctx.restore();
+
+    // Pteryges courts
+    for(let i=0;i<6;i++){ctx.fillStyle=i%2?'#8a6020':'#6a4810';ctx.fillRect(-13+i*4.5,-30,4,11);}
+
+    // Cuirasse en cotte de mailles (lorica hamata)
+    const cg2=ctx.createLinearGradient(-13,-h+8,13,-h+34);
+    cg2.addColorStop(0,hurt?'#9a9999':'#6a7a84'); cg2.addColorStop(0.5,hurt?'#bbcccc':'#8a9faa'); cg2.addColorStop(1,hurt?'#888':'#5a6a74');
+    ctx.fillStyle=cg2; ctx.beginPath(); ctx.roundRect(-13,-h+8,26,26,3); ctx.fill();
+    // Texture mailles
+    ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=0.5;
+    for(let r=0;r<5;r++) for(let c=-2;c<2;c++) {
+      ctx.beginPath(); ctx.arc((c+0.5+(r%2)*0.5)*6,-h+13+r*5,2.5,0,Math.PI*2); ctx.stroke();
+    }
+    // Épaulettes doublées
+    ctx.fillStyle=armorH; ctx.beginPath(); ctx.ellipse(-11,-h+9,9,4,-0.2,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(11,-h+9,9,4,0.2,0,Math.PI*2); ctx.fill();
+
+    // Petit bouclier ovale (parma)
+    ctx.save(); ctx.translate(-19,-h+18);
+    ctx.fillStyle=hurt?'#7a1010':'#991111';
+    ctx.beginPath(); ctx.ellipse(0,0,8,14,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#c89020'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.ellipse(0,0,8,14,0,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle='#d4a020'; ctx.beginPath(); ctx.arc(0,0,3,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // Bras droit + PILUM (javelot lourd romain)
+    ctx.fillStyle=skin; ctx.beginPath(); ctx.roundRect(9,-h+8,7,22,3); ctx.fill();
+    // Le pilum : lance longue avec tête de fer molle
+    ctx.save();
+    if(this.isAttacking){ ctx.translate(14,-h+10); ctx.rotate(-0.3); }
+    else { ctx.translate(14,-h+8); ctx.rotate(-0.1); }
+    // Hampe en bois
+    ctx.strokeStyle='#6a3a10'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-36); ctx.stroke();
+    // Section métallique souple (partie supérieure du pilum)
+    ctx.strokeStyle='#8a8a8a'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(0,-22); ctx.lineTo(0,-36); ctx.stroke();
+    // Pointe pyramidale
+    ctx.fillStyle='#c0c0c0';
+    ctx.beginPath(); ctx.moveTo(0,-36); ctx.lineTo(-2,-30); ctx.lineTo(2,-30); ctx.closePath(); ctx.fill();
+    // Attaches métalliques de la hampe
+    ctx.fillStyle='#9a9a9a'; ctx.fillRect(-3,-18,6,3); ctx.fillRect(-3,-10,6,3);
+    ctx.restore();
+
+    // Tête + casque
+    ctx.fillStyle=skin; ctx.beginPath(); ctx.arc(0,-h-4,10,0,Math.PI*2); ctx.fill();
+    const hg3=ctx.createRadialGradient(-3,-h-14,1,0,-h-8,13);
+    hg3.addColorStop(0,armorH); hg3.addColorStop(1,armor);
+    ctx.fillStyle=hg3; ctx.beginPath(); ctx.arc(0,-h-4,12,Math.PI,0); ctx.fill();
+    ctx.fillStyle=armor; ctx.beginPath(); ctx.roundRect(-12,-h+2,24,5,2); ctx.fill();
+    ctx.fillStyle='#bb1111'; ctx.beginPath(); ctx.ellipse(0,-h-14,5,3,0,0,Math.PI*2); ctx.fill();
+    // Yeux
+    ctx.fillStyle='#fff'; ctx.fillRect(-6,-h-7,4,3); ctx.fillRect(2,-h-7,4,3);
+    ctx.fillStyle='#1a0800'; ctx.fillRect(-5,-h-6,2,2); ctx.fillRect(3,-h-6,2,2);
+  }
+
+  _drawVelite(hurt, walkOff, legSwing) {
+    // Vélite : escarmoucheur léger romain, sans armure lourde, capuchon de loup
+    const skin  = hurt?'#ffccaa':'#c8845a';
+    const cloth = hurt?'#cc9966':'#7a8a40'; // couleur naturelle / terre
+    const h     = this.h;
+
+    // Jambes non protégées
+    ctx.save(); ctx.rotate((-legSwing*Math.PI)/180);
+    ctx.fillStyle='#5a3010'; ctx.fillRect(-10,-20+walkOff,9,20);
+    ctx.fillStyle='#2a1000'; ctx.fillRect(-12,-3+walkOff,12,4);
+    ctx.restore();
+    ctx.save(); ctx.rotate((legSwing*Math.PI)/180);
+    ctx.fillStyle='#5a3010'; ctx.fillRect(1,-20-walkOff,9,20);
+    ctx.fillStyle='#2a1000'; ctx.fillRect(0,-3-walkOff,12,4);
+    ctx.restore();
+
+    // Tunique courte
+    const tg3=ctx.createLinearGradient(0,-h+12,0,-h+34);
+    tg3.addColorStop(0,cloth); tg3.addColorStop(1,'#5a6830');
+    ctx.fillStyle=tg3; ctx.beginPath(); ctx.roundRect(-11,-h+12,22,22,2); ctx.fill();
+    ctx.fillStyle='#4a3008'; ctx.fillRect(-11,-h+32,22,4);
+
+    // Pas de bouclier (vélite léger)
+    // Bras gauche libre
+    ctx.fillStyle=skin; ctx.beginPath(); ctx.roundRect(-18,-h+12,7,18,3); ctx.fill();
+    // Bras droit + framée (courte lance de jet)
+    ctx.fillStyle=skin; ctx.beginPath(); ctx.roundRect(10,-h+12,7,18,3); ctx.fill();
+    ctx.save();
+    if(this.isAttacking){ ctx.translate(14,-h+14); ctx.rotate(-0.5); }
+    else { ctx.translate(14,-h+12); ctx.rotate(-0.15); }
+    ctx.strokeStyle='#8a5020'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-28); ctx.stroke();
+    ctx.fillStyle='#b0b0b0';
+    ctx.beginPath(); ctx.moveTo(0,-28); ctx.lineTo(-2,-22); ctx.lineTo(2,-22); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // Tête : casque ornée d'une peau de loup (particularité des vélites !)
+    ctx.fillStyle=skin; ctx.beginPath(); ctx.arc(0,-h-4,9,0,Math.PI*2); ctx.fill();
+    // Peau de loup (tête de loup sur le casque)
+    ctx.fillStyle=hurt?'#998866':'#7a6840';
+    ctx.beginPath(); ctx.arc(0,-h-4,11,Math.PI,0); ctx.fill();
+    // Museau du loup
+    ctx.fillStyle=hurt?'#887755':'#6a5a30';
+    ctx.beginPath(); ctx.ellipse(0,-h-14,9,5,0,0,Math.PI*2); ctx.fill();
+    // Oreilles du loup
+    ctx.fillStyle=hurt?'#998866':'#7a6840';
+    ctx.beginPath(); ctx.moveTo(-9,-h-14); ctx.lineTo(-13,-h-22); ctx.lineTo(-5,-h-14); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(9,-h-14); ctx.lineTo(13,-h-22); ctx.lineTo(5,-h-14); ctx.closePath(); ctx.fill();
+    // Intérieur oreilles
+    ctx.fillStyle='#d4948a'; ctx.beginPath(); ctx.moveTo(-9,-h-15); ctx.lineTo(-11,-h-20); ctx.lineTo(-6,-h-15); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(9,-h-15); ctx.lineTo(11,-h-20); ctx.lineTo(6,-h-15); ctx.closePath(); ctx.fill();
+    // Yeux du loup (déco)
+    ctx.fillStyle='#f0a020'; ctx.beginPath(); ctx.arc(-4,-h-15,2,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4,-h-15,2,0,Math.PI*2); ctx.fill();
+    // Yeux du soldat
+    ctx.fillStyle='#fff'; ctx.fillRect(-5,-h-6,3,3); ctx.fillRect(2,-h-6,3,3);
+    ctx.fillStyle='#1a0800'; ctx.fillRect(-4,-h-5,2,2); ctx.fillRect(3,-h-5,2,2);
+  }
+
+  _drawPraetorian(hurt, walkOff, legSwing) {
+    // Prétoriens : garde d'élite impériale, armure noire/pourpre et or
+    const skin   = hurt?'#ffccaa':'#c8845a';
+    const armor  = hurt?'#887799':'#5a4080'; // violet impérial
+    const armorH = hurt?'#aaaacc':'#8860b0';
+    const armorS = hurt?'#5a5570':'#3a2860';
+    const gold   = hurt?'#c09000':'#f0c830';
+    const h      = this.h;
+
+    // Jambes très blindées
+    ctx.save(); ctx.rotate((-legSwing*Math.PI)/180);
+    const jlg=ctx.createLinearGradient(-14,0,0,0); jlg.addColorStop(0,armorS); jlg.addColorStop(0.5,armorH); jlg.addColorStop(1,armorS);
+    ctx.fillStyle=jlg; ctx.beginPath(); ctx.roundRect(-14,-26+walkOff,12,24,2); ctx.fill();
+    ctx.strokeStyle='rgba(255,200,50,0.3)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(-8,-24+walkOff); ctx.lineTo(-8,-4+walkOff); ctx.stroke();
+    ctx.fillStyle='#1a0800'; ctx.beginPath(); ctx.roundRect(-16,-4+walkOff,15,5,1); ctx.fill();
+    ctx.restore();
+    ctx.save(); ctx.rotate((legSwing*Math.PI)/180);
+    const jrg=ctx.createLinearGradient(2,0,16,0); jrg.addColorStop(0,armorS); jrg.addColorStop(0.5,armorH); jrg.addColorStop(1,armorS);
+    ctx.fillStyle=jrg; ctx.beginPath(); ctx.roundRect(2,-26-walkOff,12,24,2); ctx.fill();
+    ctx.strokeStyle='rgba(255,200,50,0.3)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(8,-24-walkOff); ctx.lineTo(8,-4-walkOff); ctx.stroke();
+    ctx.fillStyle='#1a0800'; ctx.beginPath(); ctx.roundRect(1,-4-walkOff,15,5,1); ctx.fill();
+    ctx.restore();
+
+    // Pteryges or et pourpre
+    for(let i=0;i<8;i++){
+      ctx.fillStyle=i%2===0?armorS:gold;
+      ctx.beginPath(); ctx.moveTo(-17+i*4.5,-33); ctx.lineTo(-17+i*4.5+3.5,-33); ctx.lineTo(-17+i*4.5+2.5,-20); ctx.lineTo(-17+i*4.5+0.5,-20); ctx.closePath(); ctx.fill();
+    }
+
+    // Cuirasse musculata (moulée au corps) avec gravures
+    const ccg=ctx.createLinearGradient(-16,-h+6,16,-h+34);
+    ccg.addColorStop(0,armorS); ccg.addColorStop(0.35,armorH); ccg.addColorStop(0.65,armor); ccg.addColorStop(1,armorS);
+    ctx.fillStyle=ccg; ctx.beginPath(); ctx.roundRect(-16,-h+6,32,28,4); ctx.fill();
+    // Muscles gravés dans le métal
+    ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(0,-h+6); ctx.lineTo(0,-h+34); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,-h+16,6,Math.PI*1.1,Math.PI*1.9); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,-h+24,5,Math.PI*0.1,Math.PI*0.9); ctx.stroke();
+    // Ornements en or
+    ctx.strokeStyle=gold; ctx.lineWidth=1;
+    ctx.strokeRect(-15,-h+7,30,26);
+    ctx.beginPath(); ctx.moveTo(-15,-h+7); ctx.lineTo(-10,-h+12); ctx.lineTo(-15,-h+17); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(15,-h+7); ctx.lineTo(10,-h+12); ctx.lineTo(15,-h+17); ctx.stroke();
+    // Médaillon impérial (aigle)
+    ctx.fillStyle=gold; ctx.beginPath(); ctx.arc(0,-h+20,6,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=armorS; ctx.font='bold 7px serif'; ctx.textAlign='center';
+    ctx.fillText('✦',-0,-h+23); ctx.textAlign='left';
+
+    // Épaulettes ornementées
+    const epP=ctx.createLinearGradient(-20,-h+6,0,-h+6);
+    epP.addColorStop(0,armorS); epP.addColorStop(0.5,armorH); epP.addColorStop(1,armor);
+    ctx.fillStyle=epP; ctx.beginPath(); ctx.ellipse(-14,-h+8,10,5,-0.3,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=gold; ctx.lineWidth=1; ctx.beginPath(); ctx.ellipse(-14,-h+8,10,5,-0.3,0,Math.PI*2); ctx.stroke();
+    const epPr=ctx.createLinearGradient(0,-h+6,20,-h+6);
+    epPr.addColorStop(0,armor); epPr.addColorStop(0.5,armorH); epPr.addColorStop(1,armorS);
+    ctx.fillStyle=epPr; ctx.beginPath(); ctx.ellipse(14,-h+8,10,5,0.3,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=gold; ctx.lineWidth=1; ctx.beginPath(); ctx.ellipse(14,-h+8,10,5,0.3,0,Math.PI*2); ctx.stroke();
+
+    // Grand scutum prétoriens (noir décoré)
+    ctx.save(); ctx.translate(-23,-h+18);
+    const spg=ctx.createLinearGradient(-9,-22,9,22);
+    spg.addColorStop(0,armorS); spg.addColorStop(0.5,armor); spg.addColorStop(1,armorS);
+    ctx.fillStyle=spg;
+    ctx.beginPath(); ctx.moveTo(-9,-22); ctx.quadraticCurveTo(-12,0,-9,22); ctx.lineTo(7,22); ctx.quadraticCurveTo(10,0,7,-22); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=gold; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(-9,-22); ctx.quadraticCurveTo(-12,0,-9,22); ctx.lineTo(7,22); ctx.quadraticCurveTo(10,0,7,-22); ctx.closePath(); ctx.stroke();
+    // Étoile or
+    ctx.fillStyle=gold; ctx.beginPath(); ctx.arc(0,0,5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=armorS; ctx.font='7px serif'; ctx.textAlign='center'; ctx.fillText('✦',0,3); ctx.textAlign='left';
+    ctx.restore();
+
+    // Bras droit + épée gladius de prestige
+    ctx.fillStyle=skin; ctx.beginPath(); ctx.roundRect(11,-h+8,8,22,4); ctx.fill();
+    ctx.save();
+    if(this.isAttacking){ ctx.translate(17,-h+16); ctx.rotate(0.5); }
+    else { ctx.translate(17,-h+30); ctx.rotate(-0.15); }
+    // Lame (plus longue et fine)
+    const blp=ctx.createLinearGradient(-2,-24,2,0);
+    blp.addColorStop(0,'#f8f8ff'); blp.addColorStop(0.3,'#e8e8f0'); blp.addColorStop(0.7,'#b0b0c0'); blp.addColorStop(1,'#707088');
+    ctx.fillStyle=blp; ctx.beginPath(); ctx.moveTo(0,-24); ctx.lineTo(3,-6); ctx.lineTo(0,-2); ctx.lineTo(-3,-6); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(200,200,255,0.5)'; ctx.lineWidth=0.8; ctx.beginPath(); ctx.moveTo(0,-22); ctx.lineTo(0,-6); ctx.stroke();
+    ctx.fillStyle=gold; ctx.beginPath(); ctx.roundRect(-5,-3,10,3,1); ctx.fill();
+    ctx.fillStyle='#3a2060'; ctx.beginPath(); ctx.roundRect(-3,0,6,8,2); ctx.fill();
+    ctx.strokeStyle=gold; ctx.lineWidth=0.8; for(let i=0;i<3;i++){ctx.beginPath();ctx.moveTo(-3,2+i*2.5);ctx.lineTo(3,2+i*2.5);ctx.stroke();}
+    ctx.fillStyle=gold; ctx.beginPath(); ctx.arc(0,8,3,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // Tête + casque corinthien (prétoriens)
+    ctx.fillStyle=skin; ctx.beginPath(); ctx.arc(0,-h-4,10,0,Math.PI*2); ctx.fill();
+    // Joues du casque (couverture totale)
+    ctx.fillStyle=armorS; ctx.beginPath(); ctx.roundRect(-12,-h+2,6,14,2); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(6,-h+2,6,14,2); ctx.fill();
+    // Nasal central
+    ctx.fillStyle=armor; ctx.fillRect(-2,-h-10,4,14);
+    // Calotte
+    const hgP=ctx.createRadialGradient(-3,-h-18,1,0,-h-10,14);
+    hgP.addColorStop(0,armorH); hgP.addColorStop(0.5,armor); hgP.addColorStop(1,armorS);
+    ctx.fillStyle=hgP; ctx.beginPath(); ctx.arc(0,-h-4,13,Math.PI,0); ctx.fill();
+    ctx.fillStyle=armor; ctx.beginPath(); ctx.roundRect(-13,-h+2,26,6,2); ctx.fill();
+    // Ornements or sur le casque
+    ctx.strokeStyle=gold; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.arc(0,-h-4,13,Math.PI,0); ctx.stroke();
+    ctx.strokeRect(-13,-h+2,26,6);
+    // Grand cimier or et pourpre
+    ctx.fillStyle='#8820a0';
+    for(let i=-7;i<=7;i+=2){ const fh=14+Math.abs(i)*0.5; ctx.fillRect(i-1,-h-18-fh,2,fh); }
+    ctx.fillStyle=gold; ctx.fillRect(-8,-h-18,16,3);
+    // Yeux (visibles par les ouvertures)
+    ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(-7,-h-10,5,5); ctx.fillRect(2,-h-10,5,5);
+    ctx.fillStyle='#fff'; ctx.fillRect(-6,-h-9,3,3); ctx.fillRect(3,-h-9,3,3);
+    ctx.fillStyle='#1a0800'; ctx.fillRect(-5,-h-8,2,2); ctx.fillRect(4,-h-8,2,2);
+  }
+
+  _drawBallistaire(hurt) {
+    // Ballistaire : artilleur romain derrière une baliste
+    const skin  = hurt?'#ffccaa':'#c8845a';
+    const armor = hurt?'#bbbbaa':'#9aacb8';
+    const wood  = hurt?'#8a5a30':'#6b3a1a';
+    const gold  = '#c89020';
+    const h     = this.h;
+
+    // ── BALISTE (machine de guerre) ────────────────────────────
+    // Socle / roues
+    ctx.fillStyle=wood; ctx.beginPath(); ctx.roundRect(-22,-18,44,10,2); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=1.5;
+    ctx.strokeRect(-22,-18,44,10);
+    // Roues
+    ctx.fillStyle='#3a2010'; ctx.strokeStyle='#6b3a1a'; ctx.lineWidth=2;
+    for(const wx of [-14,10]){
+      ctx.beginPath(); ctx.arc(wx,-9,7,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle=gold; ctx.lineWidth=1;
+      for(let a=0;a<4;a++){ctx.beginPath();ctx.moveTo(wx,-9);ctx.lineTo(wx+Math.cos(a*Math.PI/2)*5,(-9)+Math.sin(a*Math.PI/2)*5);ctx.stroke();}
+      ctx.strokeStyle='#6b3a1a'; ctx.lineWidth=2;
+    }
+    // Châssis bois
+    ctx.fillStyle=wood; ctx.fillRect(-18,-32,36,16);
+    ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=1;
+    for(let r=0;r<3;r++){ctx.beginPath();ctx.moveTo(-18,-28+r*5);ctx.lineTo(18,-28+r*5);ctx.stroke();}
+    // Flèche/carreau géant
+    ctx.strokeStyle='#7a4810'; ctx.lineWidth=5;
+    ctx.beginPath(); ctx.moveTo(-20,-26); ctx.lineTo(22,-26); ctx.stroke();
+    ctx.fillStyle='#c0c0c0';
+    ctx.beginPath(); ctx.moveTo(22,-26); ctx.lineTo(16,-23); ctx.lineTo(16,-29); ctx.closePath(); ctx.fill();
+    // Corde de tension
+    ctx.strokeStyle='rgba(220,200,160,0.8)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(-18,-32); ctx.lineTo(-18,-20); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(18,-32); ctx.lineTo(18,-20); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-18,-26); ctx.lineTo(18,-26); ctx.stroke();
+
+    // ── SERVANT (soldat derrière la baliste) ─────────────────
+    ctx.save(); ctx.translate(0,-h+14);
+    // Corps
+    const cg3=ctx.createLinearGradient(-10,-20,10,0); cg3.addColorStop(0,armor); cg3.addColorStop(1,'#7a8a94');
+    ctx.fillStyle=cg3; ctx.beginPath(); ctx.roundRect(-10,-20,20,20,2); ctx.fill();
+    for(let i=0;i<3;i++){ctx.beginPath();ctx.moveTo(-10,-14+i*5);ctx.lineTo(10,-14+i*5);ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=1;ctx.stroke();}
+    // Bras en avant (manipulation)
+    ctx.fillStyle=skin; ctx.beginPath(); ctx.roundRect(-18,-18,8,14,3); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(10,-18,8,14,3); ctx.fill();
+    // Tête simple
+    ctx.fillStyle=skin; ctx.beginPath(); ctx.arc(0,-24,9,0,Math.PI*2); ctx.fill();
+    const hgB=ctx.createRadialGradient(-2,-32,1,0,-26,11);
+    hgB.addColorStop(0,hurt?'#cccccc':'#b0bcc8'); hgB.addColorStop(1,hurt?'#999':'#8898a8');
+    ctx.fillStyle=hgB; ctx.beginPath(); ctx.arc(0,-24,10,Math.PI,0); ctx.fill();
+    ctx.fillStyle=armor; ctx.beginPath(); ctx.roundRect(-10,-22,20,4,2); ctx.fill();
+    ctx.fillStyle='#dd2222'; ctx.beginPath(); ctx.arc(0,-33,4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.fillRect(-4,-27,3,3); ctx.fillRect(1,-27,3,3);
+    ctx.fillStyle='#1a0800'; ctx.fillRect(-3,-26,2,2); ctx.fillRect(2,-26,2,2);
+    ctx.restore();
   }
 
   _drawRomanCavalry(hurt) {
@@ -1248,13 +1675,18 @@ class GameState {
     if (isBossStage) {
       const btype = s >= 10 ? 'general' : 'centurion';
       this.enemies.push(new Enemy(btype, 950, this.groundY - 60));
-      this.enemies.push(new Enemy('soldier', 700, this.groundY - 50));
-      this.enemies.push(new Enemy('soldier', 1100, this.groundY - 50));
+      this.enemies.push(new Enemy('praetorian', 700, this.groundY - 50));
+      this.enemies.push(new Enemy('praetorian', 1100, this.groundY - 50));
     } else {
       const count = 2 + Math.floor(s * 0.65);
       const types = ['soldier'];
       if (s >= 2) types.push('archer');
+      if (s >= 3) types.push('hastatus');
       if (s >= 4) types.push('cavalry');
+      if (s >= 4) types.push('velite');
+      if (s >= 6) types.push('velite');
+      if (s >= 7) types.push('praetorian');
+      if (s >= 8) types.push('ballista');
       for (let i = 0; i < count; i++) {
         const t = types[Math.floor(Math.random() * types.length)];
         const ex = 450 + Math.random() * 750;
@@ -1304,7 +1736,6 @@ class GameState {
     if (id === 'hp')   { p.maxHp += 25; p.hp = Math.min(p.hp + 25, p.maxHp); }
     if (id === 'atk')  { p.atk += 5; }
     if (id === 'spd')  { p.speed = Math.min(6, p.speed + 0.5); }
-    if (id === 'jav')  { p.maxJavelins += 2; p.javelins = Math.min(p.javelins + 2, p.maxJavelins); }
     if (id === 'stam') { p.maxStamina += 20; p.stamina = Math.min(p.stamina + 20, p.maxStamina); }
     if (id === 'xpm')  { p.xpMult = Math.min(3, p.xpMult * 1.5); }
     this.phase = 'playing';
@@ -1902,8 +2333,6 @@ function bindBtn(id, fn) {
 bindBtn('btnAttack',  () => GS.player.tryAttack());
 bindBtn('btnJump',    () => GS.player.tryJump());
 bindBtn('btnShield',  () => GS.player.tryShield());
-bindBtn('btnDodge',   () => GS.player.tryDodge());
-bindBtn('btnJavelin', () => GS.player.tryJavelin());
 
 // Shield release
 const shieldBtn = document.getElementById('btnShield');
@@ -1918,8 +2347,6 @@ window.addEventListener('keydown', e => {
   if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w') GS.player.tryJump();
   if (e.key === 'z' || e.key === 'x') GS.player.tryAttack();
   if (e.key === 'Shift') GS.player.tryShield();
-  if (e.key === 'c') GS.player.tryDodge();
-  if (e.key === 'f') GS.player.tryJavelin();
   if (e.key === 'Escape') togglePause();
 });
 window.addEventListener('keyup', e => {
