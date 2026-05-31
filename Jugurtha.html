@@ -2301,5 +2301,107 @@ window.addEventListener('touchmove', e => {
     }
   }
 }, { passive: false });
+.addEventListener('touchend', e => {
+  for (const touch of e.changedTouches) {
+    if (touch.identifier !== joystickId) continue;
+    joystickActive = false;
+    joystickKnob.style.transform = 'translate(0px,0px)';
+    if (GS) { GS.input.jx = 0; GS.input.jy = 0; }
+  }
+}, { passive: false });
 
-window
+// ─── BOUTONS ACTION ───────────────────────────────────────────────────────────
+document.getElementById('btnAttack').addEventListener('touchstart', e => {
+  e.preventDefault(); if (GS) GS.player.tryAttack();
+}, { passive: false });
+
+document.getElementById('btnJump').addEventListener('touchstart', e => {
+  e.preventDefault(); if (GS) GS.player.tryJump();
+}, { passive: false });
+
+document.getElementById('btnShield').addEventListener('touchstart', e => {
+  e.preventDefault(); if (GS) GS.player.tryShield();
+}, { passive: false });
+
+document.getElementById('btnShield').addEventListener('touchend', e => {
+  e.preventDefault(); if (GS) GS.player.stopShield();
+}, { passive: false });
+
+// Clavier (desktop)
+window.addEventListener('keydown', e => {
+  if (!GS) return;
+  const p = GS.player;
+  if (e.code === 'ArrowLeft'  || e.code === 'KeyA') GS.input.jx = -1;
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') GS.input.jx =  1;
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); p.tryJump(); }
+  if (e.code === 'KeyJ' || e.code === 'KeyZ') p.tryAttack();
+  if (e.code === 'KeyK' || e.code === 'KeyX') p.tryShield();
+  if (e.code === 'Escape') togglePause();
+});
+
+window.addEventListener('keyup', e => {
+  if (!GS) return;
+  if (e.code === 'ArrowLeft'  || e.code === 'KeyA') GS.input.jx = 0;
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') GS.input.jx = 0;
+  if (e.code === 'KeyK' || e.code === 'KeyX') GS.player.stopShield();
+});
+
+// Support clic souris aussi (desktop)
+document.getElementById('btnAttack').addEventListener('mousedown', () => { if (GS) GS.player.tryAttack(); });
+document.getElementById('btnJump').addEventListener('mousedown',   () => { if (GS) GS.player.tryJump(); });
+document.getElementById('btnShield').addEventListener('mousedown', () => { if (GS) GS.player.tryShield(); });
+document.getElementById('btnShield').addEventListener('mouseup',   () => { if (GS) GS.player.stopShield(); });
+
+// ─── PAUSE ────────────────────────────────────────────────────────────────────
+let paused = false;
+function togglePause() {
+  if (!GS || GS.ended) return;
+  paused = !paused;
+  if (paused) {
+    cancelAnimationFrame(animFrame);
+    animFrame = null;
+    document.getElementById('pauseScreen').classList.remove('hidden');
+  } else {
+    document.getElementById('pauseScreen').classList.add('hidden');
+    lastTime = performance.now();
+    animFrame = requestAnimationFrame(gameLoop);
+  }
+}
+
+document.getElementById('pauseBtn').addEventListener('click', togglePause);
+document.getElementById('btnResume').addEventListener('click', togglePause);
+document.getElementById('btnQuit').addEventListener('click', () => {
+  cancelAnimationFrame(animFrame); animFrame = null;
+  GS = null; paused = false;
+  document.getElementById('pauseScreen').classList.add('hidden');
+  document.getElementById('gameOverScreen').classList.add('hidden');
+  document.getElementById('victoryScreen').classList.add('hidden');
+  document.getElementById('upgradeScreen').classList.add('hidden');
+  document.getElementById('hud').style.opacity = '0.3';
+  document.getElementById('controls').style.display = 'none';
+  document.getElementById('bossBar').style.display = 'none';
+  document.getElementById('pauseBtn').style.display = 'none';
+  document.getElementById('menuScreen').classList.remove('hidden');
+});
+
+// ─── MENU BOUTONS ─────────────────────────────────────────────────────────────
+document.getElementById('btnPlay').addEventListener('click', startGame);
+document.getElementById('btnHowTo').addEventListener('click', () => {
+  document.getElementById('menuScreen').classList.add('hidden');
+  document.getElementById('howToScreen').classList.remove('hidden');
+});
+document.getElementById('btnBackMenu').addEventListener('click', () => {
+  document.getElementById('howToScreen').classList.add('hidden');
+  document.getElementById('menuScreen').classList.remove('hidden');
+});
+document.getElementById('btnRestart').addEventListener('click', startGame);
+document.getElementById('btnPlayAgain').addEventListener('click', startGame);
+
+// ─── INIT HUD (caché au départ) ───────────────────────────────────────────────
+document.getElementById('hud').style.opacity = '0.3';
+document.getElementById('controls').style.display = 'none';
+document.getElementById('pauseBtn').style.display = 'none';
+</script>
+</body>
+</html>
+
